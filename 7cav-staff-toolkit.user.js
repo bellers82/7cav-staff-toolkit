@@ -7,6 +7,8 @@
 // @match        https://www.7cav.us/*
 // @grant        none
 // @run-at       document-idle
+// @updateURL    https://raw.githubusercontent.com/bellers82/7cav-staff-toolkit/main/7cav-staff-toolkit.user.js
+// @downloadURL  https://raw.githubusercontent.com/bellers82/7cav-staff-toolkit/main/7cav-staff-toolkit.user.js
 // ==/UserScript==
 
 (function () {
