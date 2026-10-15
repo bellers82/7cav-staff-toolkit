@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         7Cav Staff Response Toolkit
 // @namespace    https://github.com/bellers82/7cav-staff-toolkit
-// @version      0.2.0
-// @description  Prepare personalised LOI responses in 7Cav direct messages.
+// @version      0.3.0
+// @description  LOI reply templates for direct messages only.
 // @match        https://7cav.us/direct-messages/*
 // @updateURL    https://raw.githubusercontent.com/bellers82/7cav-staff-toolkit/main/7cav-staff-toolkit.user.js
 // @downloadURL  https://raw.githubusercontent.com/bellers82/7cav-staff-toolkit/main/7cav-staff-toolkit.user.js
@@ -12,7 +12,8 @@
 
 (() => {
   'use strict';
-  if (!/^\/direct-messages\/\d+\/?$/.test(location.pathname)) return;
+  const isDM = /^\/direct-messages\/\d+\/?$/.test(location.pathname);
+  if (!isDM) return;
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const clean = value => (value || '').trim();
@@ -29,15 +30,15 @@
     return hqPositions(mine.flatMap(positions));
   };
   const firstPage = () => {
-    const firstLinks = $$('a[href*="/direct-messages/"]').filter(a => /\b1\b/.test(clean(a.textContent)));
     const currentPage = $('.pageNav-page--current')?.textContent?.trim();
-    return (!currentPage || currentPage === '1') && !location.search.match(/[?&]page=[2-9]/);
+    return (!currentPage || currentPage === '1') && !/[?&]page=(?:[2-9]|[1-9]\d+)/.test(location.search) && !/\/page-(?:[2-9]|[1-9]\d+)\/?$/.test(location.pathname);
   };
   const applicantOnPage = () => firstPage() ? author(messages()[0]) : '';
+  const roleNames = { ASL:'Assistant Section Leader', SL:'Section Leader', PSG:'Platoon Sergeant', PL:'Platoon Leader', '1SG':'First Sergeant', XO:'Executive Officer', CO:'Commanding Officer' };
   const templates = {
     first: (person) => `Dear ${person},\n\nThank you for submitting your Letter of Interest. We appreciate your interest in taking on a leadership role.\n\nYour application has been received and will be reviewed by the relevant staff. We will be in touch regarding the next steps.`,
-    accepted: (person) => `Dear ${person},\n\nThank you for your interest in the position of Section Lead within our unit. We appreciate your enthusiasm and willingness to take on a leadership role.\n\nAfter careful consideration, we are pleased to inform you that your application has been successful, and we would like to appoint you as Section Lead.\n\nWe look forward to seeing you develop in your new role and continue contributing to the unit, both in and out of the AO.\n\nCongratulations!`,
-    declined: (person) => `Dear ${person},\n\nThank you for your interest in the position of Section Lead within our unit. We appreciate your enthusiasm and willingness to take on a leadership role.\n\nAfter careful consideration, we have decided not to move forward with your application at this time.\n\nShould you have any questions regarding this decision or wish to receive feedback on your application, please feel free to reach out.`
+    accepted: (person) => `Dear ${person},\n\nThank you for your interest in the position of Section Leader within our unit. We appreciate your enthusiasm and willingness to take on a leadership role.\n\nAfter careful consideration, we are pleased to inform you that your application has been successful, and we would like to appoint you as Section Leader.\n\nWe look forward to seeing you develop in your new role and continue contributing to the unit, both in and out of the AO.\n\nCongratulations!`,
+    declined: (person) => `Dear ${person},\n\nThank you for your interest in the position of Section Leader within our unit. We appreciate your enthusiasm and willingness to take on a leadership role.\n\nAfter careful consideration, we have decided not to move forward with your application at this time.\n\nShould you have any questions regarding this decision or wish to receive feedback on your application, please feel free to reach out.`
   };
   const key = '7cav-toolkit-preferred-hq';
   const getSaved = () => { try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; } };
@@ -90,6 +91,8 @@
     const staff = field('Staff name', make('input', { type: 'text', placeholder: 'Your username' })); staff.value = userName();
     const billet = field('HQ signature', make('select'));
     const manual = field('Manual HQ signature (if not detected)', make('input', { type: 'text', placeholder: 'e.g. 1/A/3-7 HQ' }));
+    const position = field('Position applied for', make('select'));
+    Object.entries(roleNames).forEach(([code, name]) => position.append(make('option', {value: code}, `${code} — ${name}`)));
     const kind = field('Response', make('select'));
     [['first','First Response'],['accepted','Position Accepted'],['declined','Position Declined']].forEach(([value,label]) => { const opt=make('option',{value},label);kind.append(opt); });
     const preview = field('Editable message preview', make('textarea'));
@@ -118,10 +121,11 @@
     const refresh = () => {
       const name = clean(applicant.value) || '{Trooper}';
       const signature = billet.value || clean(manual.value) || '{HQ Position}';
-      preview.value = `${templates[kind.value](name)}\n\nRegards,\n${signature}`;
+      preview.value = `${templates[kind.value](name).replaceAll('Section Leader', roleNames[position.value])}\n\nRegards,\n${signature}`;
     };
-    [applicant, staff, billet, manual, kind].forEach(el => el.addEventListener('input', refresh));
+    [applicant, staff, billet, manual, kind, position].forEach(el => el.addEventListener('input', refresh));
     billet.addEventListener('change', () => { if (billet.value) manual.value = ''; refresh(); });
+    manual.addEventListener('input', () => { if (clean(manual.value)) billet.value = ''; refresh(); });
     refresh();
     if (!applicant.value) warning.textContent = 'Applicant not confidently identified (possibly a later conversation page). Check the original LOI and enter the applicant manually.';
   }
@@ -133,7 +137,7 @@
     button.addEventListener('click', openPanel);
     move.insertAdjacentElement('afterend', button);
   }
-  mount();
-  const observer = new MutationObserver(() => { if (!$('#cav-loi-button')) mount(); });
+  if (isDM) mount();
+  const observer = new MutationObserver(() => { if (isDM && !$('#cav-loi-button')) mount(); });
   observer.observe(document.body, { childList: true, subtree: true });
 })();
