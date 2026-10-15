@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         7Cav Staff Response Toolkit
 // @namespace    https://github.com/bellers82/7cav-staff-toolkit
-// @version      0.3.0
+// @version      0.3.1
 // @description  LOI reply templates for direct messages only.
 // @match        https://7cav.us/direct-messages/*
 // @updateURL    https://raw.githubusercontent.com/bellers82/7cav-staff-toolkit/main/7cav-staff-toolkit.user.js
@@ -36,12 +36,9 @@
   const applicantOnPage = () => firstPage() ? author(messages()[0]) : '';
   const roleNames = { ASL:'Assistant Section Leader', SL:'Section Leader', PSG:'Platoon Sergeant', PL:'Platoon Leader', '1SG':'First Sergeant', XO:'Executive Officer', CO:'Commanding Officer' };
   const templates = {
-    first: (person, role, section, interviewTimes, staffPosition) => `Dear ${person},\n\nThank you for submitting your Letter of Interest for the position of [B]${role}, ${section}[/B].\n\nAs part of the selection process, we will be reviewing your application and conducting interviews to discuss your interest in the position, your experience, your leadership approach, and what you would bring to the Section.\n\nInterviews can be held at the following times:\n${interviewTimes}\n\nPlease get back to us with a time within the windows listed above that works best for you, and we will confirm the interview time once received.\n\nRegards,\n${staffPosition}`,
-
-    accepted: (person, role, section, staffPosition) => `Dear ${person},\n\nThank you for your interest in the position of [B]${role}, ${section}[/B] and for taking the time to participate in the selection process.\n\nAfter careful consideration, we are pleased to inform you that your application has been [B]successful[/B], and you have been selected for the position of [B]${role}, ${section}[/B].\n\nWe look forward to working with you in your new leadership role and are confident that you will make a positive contribution to the unit.\n\nFurther information regarding your appointment and any next steps will be communicated to you shortly.\n\nCongratulations!\n\nRegards,\n${staffPosition}`,
-
-    declined: (person, role, section, staffPosition) => `Dear ${person},\n\nThank you for your interest in the position of [B]${role}, ${section}[/B] and for taking the time to participate in the selection process.\n\nAfter careful consideration, we regret to inform you that your application has been [B]unsuccessful[/B] on this occasion.\n\nWe appreciate the time and effort you have put into your application and your willingness to take on additional responsibilities within the unit.\n\nWe encourage you to continue developing your leadership skills and to consider applying for future leadership opportunities as they become available.\n\nShould you wish to receive feedback regarding your application, please do not hesitate to reach out.\n\nRegards,\n${staffPosition}`
-};
+    first: (person, role, staff, staffPosition, interviewTimes) => `Dear ${person},\n\nThank you for submitting your Letter of Interest for the position of [B]${role}[/B].\n\nAs part of the selection process, we will be reviewing your application and conducting interviews to discuss your interest in the position, your experience, your leadership approach, and what you would bring to the unit.\n\nInterviews can be held at the following times:\n${interviewTimes || '[Enter interview availability]'}\n\nPlease get back to us with a time within the windows listed above that works best for you, and we will confirm the interview time once received.\n\nRegards,\n${staff}\n${staffPosition}`,
+    accepted: (person, role, staff, staffPosition) => `Dear ${person},\n\nThank you for submitting your Letter of Interest for the position of [B]${role}[/B] and for taking the time to participate in the selection process.\n\nAfter careful consideration, we are pleased to inform you that your application has been [B]successful[/B], and you have been selected for the position of [B]${role}[/B].\n\nWe appreciate your willingness to take on additional responsibilities and look forward to working with you in your new leadership role.\n\nFurther information regarding your appointment and the next steps will be communicated to you shortly.\n\nCongratulations!\n\nRegards,\n${staff}\n${staffPosition}`,
+    declined: (person, role, staff, staffPosition) => `Dear ${person},\n\nThank you for submitting your Letter of Interest for the position of [B]${role}[/B] and for taking the time to participate in the selection process.\n\nAfter careful consideration, we regret to inform you that your application has been [B]unsuccessful[/B] on this occasion.\n\nWe appreciate the time and effort you have put into your application and your willingness to take on additional responsibilities within the unit.\n\nWe encourage you to continue developing your leadership skills and to consider applying for future leadership opportunities.\n\nShould you wish to receive feedback regarding your application, please do not hesitate to reach out.\n\nRegards,\n${staff}\n${staffPosition}`
   };
   const key = '7cav-toolkit-preferred-hq';
   const getSaved = () => { try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; } };
@@ -96,6 +93,8 @@
     const manual = field('Manual HQ signature (if not detected)', make('input', { type: 'text', placeholder: 'e.g. 1/A/3-7 HQ' }));
     const position = field('Position applied for', make('select'));
     Object.entries(roleNames).forEach(([code, name]) => position.append(make('option', {value: code}, `${code} — ${name}`)));
+    const interviewTimes = field('Interview availability (first response only)', make('textarea', { placeholder: '1500z-2100z during the week\n0800z-2359z during the weekend' }));
+    interviewTimes.style.minHeight = '75px';
     const kind = field('Response', make('select'));
     [['first','First Response'],['accepted','Position Accepted'],['declined','Position Declined']].forEach(([value,label]) => { const opt=make('option',{value},label);kind.append(opt); });
     const preview = field('Editable message preview', make('textarea'));
@@ -124,9 +123,14 @@
     const refresh = () => {
       const name = clean(applicant.value) || '{Trooper}';
       const signature = billet.value || clean(manual.value) || '{HQ Position}';
-      preview.value = `${templates[kind.value](name).replaceAll('Section Leader', roleNames[position.value])}\n\nRegards,\n${signature}`;
+      const staffName = clean(staff.value) || '{Staff Name}';
+      const role = roleNames[position.value];
+      interviewTimes.parentElement.style.display = kind.value === 'first' ? '' : 'none';
+      preview.value = kind.value === 'first'
+        ? templates.first(name, role, staffName, signature, clean(interviewTimes.value))
+        : templates[kind.value](name, role, staffName, signature);
     };
-    [applicant, staff, billet, manual, kind, position].forEach(el => el.addEventListener('input', refresh));
+    [applicant, staff, billet, manual, kind, position, interviewTimes].forEach(el => el.addEventListener('input', refresh));
     billet.addEventListener('change', () => { if (billet.value) manual.value = ''; refresh(); });
     manual.addEventListener('input', () => { if (clean(manual.value)) billet.value = ''; refresh(); });
     refresh();
