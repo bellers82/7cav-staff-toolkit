@@ -1,94 +1,91 @@
 // ==UserScript==
 // @name         7Cav Staff Response Toolkit
-// @namespace    https://github.com/
-// @version      0.1.0
-// @description  Insert reusable LOI response templates into XenForo conversation replies.
-// @match        https://7cav.us/*
-// @match        https://www.7cav.us/*
-// @grant        none
-// @run-at       document-idle
+// @namespace    https://github.com/bellers82/7cav-staff-toolkit
+// @version      0.1.1
+// @description  Quick reply templates for 7Cav direct messages. Never posts automatically.
+// @match        https://7cav.us/direct-messages/*
 // @updateURL    https://raw.githubusercontent.com/bellers82/7cav-staff-toolkit/main/7cav-staff-toolkit.user.js
 // @downloadURL  https://raw.githubusercontent.com/bellers82/7cav-staff-toolkit/main/7cav-staff-toolkit.user.js
+// @grant        none
+// @run-at       document-idle
 // ==/UserScript==
 
-(function () {
+(() => {
   'use strict';
+  const TEMPLATES = {
+    'First response': 'Thank you for submitting your Letter of Interest.\n\nWhat times would you be available for an interview? Please reply with your availability so we can arrange a suitable time.',
+    'Position accepted': 'Thank you for submitting your Letter of Interest.\n\nWe are pleased to inform you that your application has been successful. Further details will follow shortly.',
+    'Position declined': 'Thank you for taking the time to submit your Letter of Interest.\n\nUnfortunately, your application has not been successful on this occasion. We appreciate your interest and encourage you to apply for future opportunities.'
+  };
 
-  const templates = [
-    { label: 'First response', body: 'Thank you for submitting your Letter of Interest.\n\nWhat times would you be available for an interview? Please reply with your availability so we can arrange a suitable time.' },
-    { label: 'Position accepted', body: 'Thank you for submitting your Letter of Interest.\n\nWe are pleased to confirm that you have been selected for the position. Further information will follow shortly.' },
-    { label: 'Position declined', body: 'Thank you for submitting your Letter of Interest.\n\nUnfortunately, your application was not successful on this occasion. Thank you for your interest, and we encourage you to apply for future opportunities.' }
-  ];
-
-  const isConversation = () => /\/conversations\//i.test(location.pathname);
-
-  function findToolbar() {
-    const candidates = [...document.querySelectorAll('a, button')];
-    const move = candidates.find(el => /^Move$/i.test(el.textContent.trim()));
-    if (!move) return null;
-    return move.closest('.buttonGroup, .block-outer-opposite, .block-outer, .pageAction, .p-title-pageAction') || move.parentElement;
-  }
-
-  function findEditor() {
-    return document.querySelector('.fr-element[contenteditable="true"], .fr-view[contenteditable="true"], .tox-edit-area iframe, textarea[name="message"], textarea[name="message_html"], [contenteditable="true"][role="textbox"]');
-  }
-
-  function fillEditor(body) {
-    const editor = findEditor();
+  function insertIntoEditor(message) {
+    const editor = document.querySelector('.fr-element[contenteditable="true"], .fr-view[contenteditable="true"], [contenteditable="true"][role="textbox"], textarea[name="message"], textarea[name="message_html"], textarea[name="message_body"]');
     if (!editor) {
-      alert('Reply editor not found. Open the reply box first, then select the template again.');
+      window.prompt('Reply editor not detected. Copy this template and paste it into the reply box:', message);
       return;
     }
-    if (editor.tagName === 'IFRAME') {
-      alert('This forum uses an iframe editor. Please copy the template manually until editor compatibility is added.');
-      return;
-    }
-    if (editor.value !== undefined) {
-      if (editor.value.trim() && !confirm('Replace the current reply draft?')) return;
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-      setter.call(editor, body);
+    editor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    editor.focus();
+    if (editor.matches('textarea')) {
+      editor.value = message;
       editor.dispatchEvent(new Event('input', { bubbles: true }));
       editor.dispatchEvent(new Event('change', { bubbles: true }));
     } else {
-      if (editor.textContent.trim() && !confirm('Replace the current reply draft?')) return;
-      editor.focus();
-      editor.innerHTML = '';
-      for (const paragraph of body.split('\n\n')) {
-        const p = document.createElement('p');
-        p.textContent = paragraph;
-        editor.appendChild(p);
-      }
-      editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: body }));
+      // Plain text only: never interpret template content as HTML.
+      editor.replaceChildren();
+      message.split('\n').forEach((line, index) => {
+        if (index) editor.appendChild(document.createElement('br'));
+        editor.appendChild(document.createTextNode(line));
+      });
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
     }
-    editor.focus();
   }
 
   function mount() {
-    if (!isConversation() || document.getElementById('cav-loi-toolkit')) return;
-    const toolbar = findToolbar();
-    if (!toolbar) return;
-    const wrapper = document.createElement('span');
-    wrapper.id = 'cav-loi-toolkit';
-    wrapper.style.cssText = 'display:inline-flex;align-items:center;margin-left:8px;gap:4px;';
-    const label = document.createElement('label');
-    label.textContent = 'LOI Reply:';
-    label.style.cssText = 'font-size:12px;font-weight:bold;';
-    const select = document.createElement('select');
-    select.setAttribute('aria-label', 'LOI reply template');
-    select.style.cssText = 'background:#292929;color:#ffd23c;border:1px solid #777;padding:5px;max-width:210px;';
-    const placeholder = new Option('Choose a response…', '');
-    select.add(placeholder);
-    templates.forEach((template, index) => select.add(new Option(template.label, String(index))));
-    select.addEventListener('change', () => {
-      if (!select.value) return;
-      fillEditor(templates[Number(select.value)].body);
-      select.value = '';
+    const move = document.querySelector('a.button--icon--move[href*="/direct-messages/"]');
+    if (!move || document.getElementById('cav-loi-toolkit')) return;
+    const wrap = document.createElement('span');
+    wrap.id = 'cav-loi-toolkit';
+    wrap.style.cssText = 'display:inline-flex;position:relative;vertical-align:middle;';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'button button--link';
+    button.textContent = 'LOI Reply ▾';
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-label', 'Choose an LOI reply template');
+    const menu = document.createElement('div');
+    menu.hidden = true;
+    menu.style.cssText = 'position:absolute;top:100%;right:0;min-width:190px;z-index:10000;background:#202020;border:1px solid #777;padding:4px;box-shadow:0 5px 15px #0008;';
+    for (const [label, template] of Object.entries(TEMPLATES)) {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.textContent = label;
+      option.style.cssText = 'display:block;width:100%;text-align:left;padding:9px;color:#ffcb2b;background:transparent;border:0;cursor:pointer;';
+      option.addEventListener('click', () => {
+        menu.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+        insertIntoEditor(template);
+      });
+      menu.appendChild(option);
+    }
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      menu.hidden = !menu.hidden;
+      button.setAttribute('aria-expanded', String(!menu.hidden));
     });
-    wrapper.append(label, select);
-    toolbar.appendChild(wrapper);
+    document.addEventListener('click', (event) => {
+      if (!wrap.contains(event.target)) {
+        menu.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+      }
+    });
+    wrap.append(button, menu);
+    move.insertAdjacentElement('afterend', wrap);
   }
 
   mount();
-  const observer = new MutationObserver(() => mount());
+  const observer = new MutationObserver(() => {
+    if (!document.getElementById('cav-loi-toolkit')) mount();
+  });
   observer.observe(document.body, { childList: true, subtree: true });
 })();
