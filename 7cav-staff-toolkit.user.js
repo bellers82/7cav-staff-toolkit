@@ -58,7 +58,6 @@
       const response = await fetch(`/members/${encodeURIComponent(id)}/`, { credentials: 'same-origin' });
       if (!response.ok) return [];
       const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
-      // Only read position banners associated with the profile's member header, not other users' posts.
       const blocks = $$('.memberHeader .userBanner--cav-pos strong, .memberHeader-content .userBanner--cav-pos strong', doc);
       return hqPositions(blocks.map(node => clean(node.textContent)));
     } catch { return []; }
@@ -75,7 +74,6 @@
     const editor = $('.fr-element[contenteditable="true"], .fr-view[contenteditable="true"], [contenteditable="true"][role="textbox"]');
     if (!editor) return false;
     editor.focus();
-    // Use the editor's own text insertion path, rather than overwriting its DOM/HTML.
     const inserted = document.execCommand('insertText', false, text);
     editor.dispatchEvent(new Event('input', { bubbles: true }));
     return Boolean(inserted);
